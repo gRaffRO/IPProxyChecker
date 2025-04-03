@@ -95,7 +95,7 @@ ip-checker/
 ## API and Rate Limiting
 
 The service uses the IPQualityScore API which has the following limits:
-- Free checks: 5,000/month
+- Free checks: 1,000/month
 - Rate limit: 2 requests/second
 
 ## Security Features
