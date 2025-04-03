@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-ip_checker = IPChecker(os.getenv('API_KEY', 'ZaAQw1F6BEg6wUGwOxVhHbsmkwMta0DD'))
+ip_checker = IPChecker(os.getenv('API_KEY', 'YOUR_API_KEY'))
 
 @app.route('/reset', methods=['POST'])
 def reset_data():
