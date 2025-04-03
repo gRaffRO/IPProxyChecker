@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Proxy Checker</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h3 class="subtitle">Filtrare și Export</h3>
+            <div class="filter-section">
+                <form id="filterForm" class="filter-form">
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="proxy" value="true"> Proxy
+                            <select name="proxy_value" class="filter-select">
+                                <option value="true">Da</option>
+                                <option value="false">Nu</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="vpn" value="true"> VPN
+                            <select name="vpn_value" class="filter-select">
+                                <option value="true">Da</option>
+                                <option value="false">Nu</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="tor" value="true"> TOR
+                            <select name="tor_value" class="filter-select">
+                                <option value="true">Da</option>
+                                <option value="false">Nu</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="bot" value="true"> Bot Status
+                            <select name="bot_value" class="filter-select">
+                                <option value="true">Da</option>
+                                <option value="false">Nu</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="fraud_score" value="true"> Scor Fraudă
+                            <input type="number" name="fraud_score_value" class="filter-input" min="0" max="100" value="50">
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="abuse" value="true"> Abuz Recent
+                            <select name="abuse_value" class="filter-select">
+                                <option value="true">Da</option>
+                                <option value="false">Nu</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">
+                            <input type="checkbox" name="crawler" value="true"> Crawler
+                            <select name="crawler_value" class="filter-select">
+                                <option value="true">Da</option>
+                                <option value="false">Nu</option>
+                            </select>
+                        </label>
+                    </div>
+                    <button type="button" id="showResults" class="btn btn-primary">🔍 Afișează Rezultate</button>
+                    <button type="submit" class="btn btn-primary">📥 Descarcă Rezultate</button>
+                </form>
+                <form method="post" action="{{ url_for('reset_data') }}">
+                    <button class="btn btn-danger">🗑️ Resetare date</button>
+                </form>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <h1 class="title">IP Proxy Checker</h1>
+            <form method="post" enctype="multipart/form-data">
+                <div class="input-group">
+                    <div class="input-container">
+                        <label class="input-label" for="single_ip">IP Individual</label>
+                        <input type="text" id="single_ip" name="single_ip" placeholder="ex: 192.168.1.1">
+                    </div>
+                    <div class="input-container">
+                        <label class="input-label" for="multi_ip">Listă IP-uri</label>
+                        <textarea id="multi_ip" name="multi_ip" placeholder="ex:&#10;192.168.1.1&#10;10.0.0.1"></textarea>
+                    </div>
+                    <div class="input-container">
+                        <label class="input-label" for="file">Fișier .txt</label>
+                        <input type="file" id="file" name="file">
+                    </div>
+                </div>
+
+                <div id="progress-container" style="display:none;">
+                    <div class="progress-text">Se scanează IP-urile... <span id="progress-count">0 din 0</span></div>
+                    <div class="progress-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">🔍 Scanează</button>
+            </form>
+
+            <div id="filtered-results" style="display:none;">
+                <h2 class="subtitle">Rezultate Filtrate</h2>
+                <div class="table-container"></div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: var(--success)"></span>
+                        Sub 10 (Excelent)
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: var(--warning)"></span>
+                        10-30 (Acceptabil)
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: #f97316"></span>
+                        31-50 (Suspect)
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: var(--danger)"></span>
+                        Peste 50 (Riscat)
+                    </div>
+                </div>
+            </div>
+
+            {% if table %}
+            <div class="results-section">
+                <h2 class="subtitle">Rezultate Scanare</h2>
+                <div class="table-container">{{ table|safe }}</div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: var(--success)"></span>
+                        Sub 10 (Excelent)
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: var(--warning)"></span>
+                        10-30 (Acceptabil)
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: #f97316"></span>
+                        31-50 (Suspect)
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background: var(--danger)"></span>
+                        Peste 50 (Riscat)
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
