@@ -1,142 +1,152 @@
-# IPProxyChecker
+# IP Proxy Checker
 
-# IP Checker
+A local web application for checking and analyzing IP addresses with the
+[IPQualityScore](https://www.ipqualityscore.com/) service. It detects proxies,
+VPNs, TOR exit nodes, bots, recent abuse and a fraud score, then lets you filter
+and export the results.
 
-A web application for checking and analyzing IP addresses using the IPQualityScore service. The application allows verification of IP addresses for proxies, VPNs, TOR, and other security characteristics.
+> Built to run **locally, single-user**. It is not hardened for public exposure
+> (no auth, dev server, listens on `127.0.0.1`).
 
 ## Features
 
-- Individual IP address verification
-- Multiple IP address verification (up to 20 simultaneously)
-- Text file upload for IP addresses
-- Filter results by multiple criteria:
-  - Proxy/VPN
-  - VPN
-  - TOR
-  - Bot Status
-  - Fraud Score
-  - Recent Abuse
-  - Crawler
-- Export results to CSV format
-- Intuitive and easy-to-use interface
-- Quick data reset
-- Results persistence until manual reset or page reload
+- Single IP, multiple IPs (max 20 pasted), or `.txt` upload (max 500 IPs)
+- Accepts proxy lines in any common format and **preserves the original format
+  on export**: `ip`, `ip:port`, `ip:port:user:pass`, `ip,user,pass`,
+  `ip user pass`, and bracketed IPv6 `[2001:db8::1]:8080`
+- **Asynchronous scanning with real progress** (live count, resumes after a
+  page refresh)
+- **Post-scan summary** dashboard (total, clean, proxy/VPN, TOR, avg fraud, top
+  countries)
+- **Scan history** — every scan is saved; reload or delete past batches
+- **Cache control** — TTL cache (re-scans are instant & free), a "re-verify
+  (ignore cache)" toggle, a clear-cache button, and live API-call / cache counters
+- **Results persist** across refresh and app restart (SQLite)
+- Automatic IP validation (IPv4 + IPv6) and de-duplication by IP
+- **Select rows by hand (checkboxes) or filter by criteria**, then export only
+  what you picked
+- **Drag & drop** a `.txt` file to import
+- Export the matching proxy lines as `.txt` (original format kept), or the full
+  analysis as **CSV or JSON**; copy the proxy list to the clipboard
+- All rendered values are HTML-escaped (no XSS from IP/ISP/org fields)
 
 ## Requirements
 
 - Python 3.x
-- Flask
-- pandas
-- requests
-- python-dotenv
+- Flask, pandas, requests, python-dotenv (see `requirements.txt`)
+- SQLite, `ipaddress`, `csv`, `html` are used from the Python standard library
+  (no extra install)
 
 ## Installation
 
-1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd ip-checker
-```
+# 1. Get the code, then create a virtual environment
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
 
-2. Install dependencies:
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Configure the API key
+copy .env.example .env   # Windows  (cp on macOS/Linux)
+# then edit .env and set your real key:
+#   API_KEY=your_real_key_here
 ```
 
-3. Create a `.env` file and add your API key:
-```
-API_KEY=your_api_key_here
-```
+Get a free API key from [IPQualityScore](https://www.ipqualityscore.com/)
+(free tier: 1,000 checks/month, ~2 requests/second). Until a real key is set the
+UI loads but shows a warning banner and every lookup returns an error.
+
+## Configuration (`.env`)
+
+| Variable          | Default            | Description                                             |
+| ----------------- | ------------------ | ------------------------------------------------------- |
+| `API_KEY`         | `YOUR_API_KEY`     | IPQualityScore API key (required for real checks)       |
+| `CACHE_TTL_HOURS` | `24`               | How long a cached IP lookup stays fresh                 |
+| `FLASK_DEBUG`     | `0`                | Set to `1` to enable the Flask debugger (local only)    |
 
 ## Usage
 
-1. Start the application:
 ```bash
 python app.py
 ```
 
-2. Open your browser and navigate to `http://localhost:5050`
+Then open `http://localhost:5050`.
 
-3. You can check IP addresses in the following ways:
-   - Enter a single IP address in the dedicated field
-   - Enter multiple IP addresses separated by commas (max 20)
-   - Upload a .txt file with IP addresses (one per line)
+1. Drag & drop a `.txt`, browse for it, paste a list (max 20), or type a single
+   IP. Lines may be `ip`, `ip:port`, `ip:port:user:pass`, `ip,user,pass`, etc. —
+   the whole line is kept for export. Tick **Re-verifică** to ignore the cache.
+2. Click **Scanează**. Progress is live; the summary cards and results table
+   appear, and the scan is saved to **Istoric** + restored after a refresh.
+3. Narrow the table with the sidebar filters (they apply automatically) or the
+   **✨ Doar curate** preset, and/or tick individual rows.
+4. Export with the sidebar: **Descarcă** (`.txt` proxy list in the original
+   format, `.csv`, or `.json` analysis) or **Copiază** to the clipboard. With no
+   row ticked, the export uses everything currently shown.
+5. **Istoric** reloads/deletes past scans; **Sistem** clears the cache or resets
+   the current data.
 
-4. Use filters to refine results:
-   - Check desired criteria
-   - Adjust values as needed
-   - Results update automatically
+## How it works
 
-5. To export results:
-   - Apply desired filters
-   - Click the "Download CSV" button
-   - File will download automatically
+- `app.py` — Flask routes. Scanning is async: `POST /scan` starts a background
+  job, the browser polls `GET /progress/<job_id>` for real progress, the
+  rendered table and a summary. `/filter`, `/export`, `/copy-clean`, `/history*`,
+  `/stats`, `/cache/clear` and `/reset` operate on the stored results.
+- `ip_checker.py` — input parsing/validation, the rate-limited threaded scan
+  (with caching + de-dup), filtering, summary, escaped HTML table building, and
+  CSV/JSON/clipboard export.
+- `storage.py` — SQLite (WAL): `ip_cache` (TTL memoization), `app_state` (last
+  scan + API-call counter, restored on startup) and `scans` (history, last 50).
 
-6. To reset data:
-   - Click the "Reset Data" button
-   - All results will be cleared
+### Endpoints
 
-## Project Structure
+| Method | Path                  | Purpose                                       |
+| ------ | --------------------- | --------------------------------------------- |
+| GET    | `/`                   | UI; restores the last scan if present         |
+| POST   | `/scan`               | Start a scan (JSON `{ips, source, bypass_cache}`) |
+| GET    | `/progress/<id>`      | Job progress + finished table + summary       |
+| GET    | `/filter`             | Filtered results `{table, summary}` (JSON)    |
+| POST   | `/export`             | Export `{ips, format}` (clean/full/json)      |
+| POST   | `/copy-clean`         | Clean proxy lines for `{ips}` (JSON)          |
+| GET    | `/history`            | List saved scans                              |
+| POST   | `/history/load/<id>`  | Load a saved scan as the current set          |
+| POST   | `/history/delete/<id>`| Delete a saved scan                           |
+| POST   | `/history/clear`      | Clear all history                             |
+| GET    | `/stats`              | API-call + cache counters                     |
+| POST   | `/cache/clear`        | Empty the IP lookup cache                     |
+| POST   | `/reset`              | Clear current + persisted results             |
 
-```
-ip-checker/
-├── app.py                 # Main Flask application
-├── ip_checker.py         # IP checking class
-├── requirements.txt      # Project dependencies
-├── static/
-│   ├── css/
-│   │   └── style.css    # CSS styling
-│   └── js/
-│       └── main.js      # JavaScript logic
-└── templates/
-    └── index.html       # Main template
-```
+## Data & limits
 
-## API and Rate Limiting
+- Runtime data lives in `data/ipchecker.db` (git-ignored). Delete it to wipe the
+  cache and saved results.
+- Caps: 20 pasted IPs, 500 IPs per file, 1 MB upload, 2 MB request body.
+- Caching respects the IPQualityScore rate limit (~2 req/s) via a small thread
+  pool + shared rate limiter.
 
-The service uses the IPQualityScore API which has the following limits:
-- Free checks: 1,000/month
-- Rate limit: 2 requests/second
+## Output schema
 
-## Security Features
+Each result row exposes: IP, Country, City, ISP, Organization, Proxy/VPN, VPN,
+TOR, Bot Status, Fraud Score, Recent Abuse, Crawler. The fraud score is colored:
+≤10 excellent, 11–30 acceptable, 31–50 suspect, >50 risky.
 
-- IP address input validation
-- Limit of 20 IPs for multiple verification
-- Data sanitization before display
-- XSS injection protection
-- Secure file handling for uploads
+## Not included (by design, for local use)
 
-## Data Persistence
-
-- Results are stored in memory until:
-  - Manual reset via the "Reset Data" button
-  - Application restart
-  - Browser page reload
-- Filtered results can be downloaded at any time
-- All data is temporary and not stored in any database
-
-## Error Handling
-
-- Invalid IP address format detection
-- Maximum IP limit enforcement
-- API error handling and user feedback
-- File upload validation
-- Empty result set handling
-
-## Contributing
-
-If you'd like to contribute to the project:
-1. Fork the repository
-2. Create a new branch
-3. Make your changes
-4. Submit a pull request
+Auth, CSRF, a production WSGI server, multi-user isolation and rate limiting are
+intentionally omitted. Add them before exposing this on a network.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE).
+
+## Author
+
+Built and maintained by [N.Stefan](https://graffro.dev).
 
 ## Acknowledgments
 
-- [IPQualityScore](https://www.ipqualityscore.com/) for providing the IP verification service
-- Flask community for the excellent web framework
-- Pandas team for the data handling capabilities
+- [IPQualityScore](https://www.ipqualityscore.com/) for the IP verification API
+- Flask, pandas and the DataTables project
