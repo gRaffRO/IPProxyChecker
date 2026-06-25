@@ -203,7 +203,7 @@ def export():
     else:
         payload = ip_checker.clean_text(records)
         if not payload:
-            return jsonify({"error": "Niciuna dintre selecțiile nu are o linie proxy validă."}), 404
+            return jsonify({"error": "Niciuna dintre selecții nu are o linie proxy validă."}), 404
         mimetype, name = "text/plain", "clean_proxies.txt"
 
     return send_file(io.BytesIO(payload.encode("utf-8")), mimetype=mimetype,
